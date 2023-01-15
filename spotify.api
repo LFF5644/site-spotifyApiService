@@ -1,0 +1,7 @@
+<?
+const {
+	jsonStringify,
+}=globals.functions;
+const spotify=service_require("server/spotify/spotify");
+const result=spotify.infos;
+?><?=typeof(result)=="string"?result:jsonStringify(result)?>
