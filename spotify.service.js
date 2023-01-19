@@ -35,7 +35,7 @@ this.start=()=>{
 			request:"get track",
 		});
 	}else if(this.config.refresh_token&&this.config.refresh_token){
-		refresh_access_token();
+		this.refresh_access_token();
 	}
 	setInterval(()=>{
 		this.callApi({
