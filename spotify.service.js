@@ -162,6 +162,23 @@ this.refresh_access_token=()=>{
 		contentType:"application/x-www-form-urlencoded",
 	});
 }
+this.playbackAction=(data)=>{
+	const {action}=data;
+
+	if(action=="next"){
+		this.callApi({
+			url:URLS.next,
+			method:"post",
+		});
+	}
+	else if(action=="previous"){
+		this.callApi({
+			url:URLS.previous,
+			method:"post",
+		});
+	}
+}
+
 this.stop=()=>{
 	this.saveConfig();
 	this.infos=null;
