@@ -1,7 +1,65 @@
 <?
-const {
-	jsonStringify,
-}=globals.functions;
-const spotify=service_require("server/spotify/spotify");
-const result=spotify.infos;
-?><?=typeof(result)=="string"?result:jsonStringify(result)?>
+	const {
+		jsonStringify,
+	}=globals.functions;
+	const services={
+		spotify: service_require("server/spotify/spotify"),
+		account: service_require("server/account/account.new"),
+	};
+	let result="{}";
+	const want=(input.want||"").toLowerCase();
+	const accountInfo=services.account.authUserByInput(input);
+	const account=accountInfo.allowed?accountInfo.data.account:null;
+	
+	function throw401(){
+		response.statusCode=401;
+		return {
+			code:"no permission",
+			errormsg:"Keine Erlaubnis!",
+		};
+	}
+
+	response.setHeader("Content-Type","application/json");
+	response.statusCode=200;
+
+	x:if(want=="next"||want=="previous"){
+		if(!account){
+			result=throw401();
+			break x;
+		}
+		if(
+			!services.account.hasAccountRankAttr({
+				username: account.username,
+				rankAttr:"spotifyApi-changePlayback",
+			})
+		){
+			result=throw401();
+			break x;
+		}
+
+		services.spotify.playbackAction({action:want});
+		result={
+			code:"ok",
+		};
+	}
+	else if(want=="getPlayback".toLowerCase()){
+		result={
+			code:"ok",
+			data: input.raw?{
+				infos: services.spotify.infos,
+				infos_raw: services.spotify.infos_raw,
+			}:{
+				infos: services.spotify.infos,
+			},
+		}
+	}else{
+		result={
+			code:"wrong want",
+			errormsg:"Parameter 'want' kann nicht zugeordnet werden",
+		};
+	}
+?><?=
+	input.debug?
+		jsonStringify(result):
+		JSON.stringify(result)
+?>
