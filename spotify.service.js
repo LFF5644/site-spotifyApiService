@@ -177,6 +177,12 @@ this.playbackAction=(data)=>{
 			method:"post",
 		});
 	}
+	else if(action=="pause"){
+		this.callApi({
+			url:URLS.pause,
+			method:"post",
+		});
+	}
 }
 
 this.stop=()=>{

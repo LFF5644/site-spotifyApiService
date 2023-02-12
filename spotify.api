@@ -22,7 +22,11 @@
 	response.setHeader("Content-Type","application/json");
 	response.statusCode=200;
 
-	x:if(want=="next"||want=="previous"){
+	x:if(
+		want=="next"||
+		want=="previous"||
+		want=="pause"	
+	){
 		if(!account){
 			result=throw401();
 			break x;
