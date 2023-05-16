@@ -33,11 +33,17 @@ this.start=()=>{
 	this.config=this.readConf();
 	this.infos_raw=null;
 	this.infos=null;
+	this.info_last={
+		deviceId: null,
+		playing: null,
+		progress: null,
+		trackId: null,
+		lastSend: 0,
+	};
 
 	this.io=new socketIo.Server(13756,{cors:{origin:"*"}});
 	this.io.on("connection",socket=>{
 		const id=socket.id;
-		console.log("connect "+id);
 		let client={
 			account: null,
 			allowChangePlayback: false,
@@ -52,6 +58,7 @@ this.start=()=>{
 			const login=services.account.authUserByInput({
 				token: auth.token,
 			});
+			console.log(login);
 			if(!login.allowed) break auth;
 			const account=login.data.account;
 			client=this.writeClient(id,{
@@ -67,7 +74,7 @@ this.start=()=>{
 			});
 		}
 		socket.emit("init",{
-			account:{
+			account: !client.account?null:{
 				username: client.account.username,
 				nickname: client.account.nickname,
 			},
@@ -82,6 +89,9 @@ this.start=()=>{
 				cb(this.infos);
 			}
 		});
+		socket.on("disconnect",()=>{
+			this.clients.delete(id);
+		});
 	});
 
 	if(this.config.access_token){
@@ -94,15 +104,28 @@ this.start=()=>{
 		this.refresh_access_token();
 	}
 	setInterval(()=>{
-		this.callApi({
-			method: "get",
-			request: "get track",
-			url: URLS.player,
-		});
-	},10e3);
+		const now=Date.now();
+		const call=()=>{
+			this.callApi({
+				method: "get",
+				request: "get track",
+				url: URLS.player,
+			});
+			this.info_last.lastSend=now;
+		}
+
+		if(
+			now-this.info_last.lastSend>2e3&&
+			this.clients.size>0
+		) call();
+		else if(
+			now-this.info_last.lastSend>10e3&&
+			this.clients.size<1
+		) call();
+
+	},1e3);
 }
 this.writeClient=(id,object)=>{
-	console.log("change "+id);
 	const client={
 		...this.clients.get(id),
 		...object,
@@ -153,14 +176,15 @@ this.HandleServerResponse=data=>{
 		try{
 			i={
 				playing: serverResponse.is_playing,
-				device: {
+				device:{
 					active: serverResponse.device.is_active,
 					id: serverResponse.device.id,
 					name: serverResponse.device.name,
 					type: serverResponse.device.type,
 					volume: serverResponse.device.volume_percent,
 				},
-				track: {
+				track:{
+					id: serverResponse.item.id,
 					imgs: serverResponse.item.album.images,
 					length: serverResponse.item.duration_ms,
 					mp3: serverResponse.item.preview_url,
@@ -177,6 +201,20 @@ this.HandleServerResponse=data=>{
 		}
 		this.infos=i;
 		this.infos_raw=infos_raw;
+
+		// tell sockets changes
+		if(i.device.id!==this.info_last.deviceId) this.io.emit("change-device",i.device);
+		if(i.playing!==this.info_last.playing) this.io.emit("change-playing",i.playing);
+		if(i.track.progress!==this.info_last.progress) this.io.emit("change-progress",i.track.progress);
+		if(i.track.id!==this.info_last.trackId) this.io.emit("change-track",i.track);
+
+		this.info_last={
+			...this.info_last,
+			deviceId: i.device.id,
+			playing: i.playing,
+			progress: i.track.progress,
+			trackId: i.track.id,
+		};
 	}
 	if(clientRequest=="get access_token"){
 		this.config.access_token=serverResponse.access_token;
@@ -196,10 +234,10 @@ this.callApi=data=>{
 		method: method.toUpperCase(),
 		headers: {
 			"Content-Type": contentType,
-			"Authorization": (
-				auth=="token"?
-					"Bearer "+this.config.access_token: 
-					"Basic "+encodeBase64(this.config.client_id+": "+this.config.client_secret)
+			"Authorization":(
+				auth==="token"
+				?	"Bearer "+this.config.access_token
+				:	"Basic "+encodeBase64(this.config.client_id+":"+this.config.client_secret)
 			),
 		},
 		body: typeof(body)=="string"?body: JSON.stringify(body),
