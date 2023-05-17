@@ -58,7 +58,6 @@ this.start=()=>{
 			const login=services.account.authUserByInput({
 				token: auth.token,
 			});
-			console.log(login);
 			if(!login.allowed) break auth;
 			const account=login.data.account;
 			client=this.writeClient(id,{
@@ -91,6 +90,10 @@ this.start=()=>{
 		});
 		socket.on("disconnect",()=>{
 			this.clients.delete(id);
+		});
+
+		if(client.allowChangePlayback) socket.on("playbackAction",action=>{
+			this.playbackAction(action);
 		});
 	});
 
@@ -155,8 +158,6 @@ this.HandleServerResponse=data=>{
 		clientRequest,
 		serverResponse,
 	}=data;
-	console.log(data);
-	console.log();
 	if(serverResponse.error){
 		const status=serverResponse.error.status;
 		if(status==401){
@@ -268,24 +269,34 @@ this.refresh_access_token=()=>{
 	});
 }
 this.playbackAction=(data)=>{
+	console.log(data);
 	const {action}=data;
 
-	if(action=="next"){
+	if(action==="next"){
 		this.callApi({
 			method: "post",
 			url: URLS.next,
 		});
 	}
-	else if(action=="previous"){
+	else if(action==="previous"){
 		this.callApi({
 			method: "post",
 			url: URLS.previous,
 		});
 	}
-	else if(action=="pause"){
+	else if(action==="pause"){
 		this.callApi({
-			method: "post",
+			method: "put",
 			url: URLS.pause,
+		});
+	}
+	else if(action==="play"){
+		const {deviceId}=data;
+		const url=URLS.play+"?device_id="+(deviceId?deviceId:this.info_last.deviceId);
+		log(url);
+		this.callApi({
+			method: "put",
+			url,
 		});
 	}
 }
