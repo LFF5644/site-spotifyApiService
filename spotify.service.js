@@ -78,6 +78,7 @@ this.start=()=>{
 				nickname: client.account.nickname,
 			},
 			allowChangePlayback: client.allowChangePlayback,
+			currentlyPlaying: this.infos,
 		});
 		socket.on("get-infos",(returnType="emit",cb)=>{
 			if(returnType==="emit"){
@@ -118,7 +119,7 @@ this.start=()=>{
 		}
 
 		if(
-			now-this.info_last.lastSend>2e3&&
+			now-this.info_last.lastSend>300&&
 			this.clients.size>0
 		) call();
 		else if(
@@ -126,7 +127,7 @@ this.start=()=>{
 			this.clients.size<1
 		) call();
 
-	},1e3);
+	},200);
 }
 this.writeClient=(id,object)=>{
 	const client={
@@ -206,7 +207,7 @@ this.HandleServerResponse=data=>{
 		// tell sockets changes
 		if(i.device.id!==this.info_last.deviceId) this.io.emit("change-device",i.device);
 		if(i.playing!==this.info_last.playing) this.io.emit("change-playing",i.playing);
-		if(i.track.progress!==this.info_last.progress) this.io.emit("change-progress",i.track.progress);
+		if(i.track.progress!==this.info_last.progress) this.io.volatile.emit("change-progress",i.track.progress);
 		if(i.track.id!==this.info_last.trackId) this.io.emit("change-track",i.track);
 
 		this.info_last={
@@ -269,7 +270,6 @@ this.refresh_access_token=()=>{
 	});
 }
 this.playbackAction=(data)=>{
-	console.log(data);
 	const {action}=data;
 
 	if(action==="next"){
