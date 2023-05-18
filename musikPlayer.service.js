@@ -1,0 +1,82 @@
+const socketIo=require("socket.io");
+const socketIoClient=require("socket.io-client");
+const services={
+	account: service_require("server/account/account.new"),
+};
+
+const musikPlayerServer="http://127.0.0.1:4561";
+
+this.start=()=>{
+	this.currentlyPlaying=null;
+	this.clients=new Map();
+
+	this.io=new socketIo.Server(27397,{cors:{origin:"*"}});
+	this.io.on("connection",socket=>{
+		const id=socket.id;
+		let client={
+			account: null,
+			allowChangePlayback: false,
+			socket,
+			token: null,
+		};
+		this.clients.set(id,client);
+		auth:{
+			const auth=socket.handshake.auth;
+			if(typeof(auth)!=="object") break auth;
+			if(!auth.token) break auth;
+			const login=services.account.authUserByInput({
+				token: auth.token,
+			});
+			if(!login.allowed) break auth;
+			const account=login.data.account;
+			client=this.writeClient(id,{
+				account,
+				token: auth.token,
+			});
+			const allowChangePlayback=services.account.hasAccountRankAttr({
+				rankAttr: "musikPlayer-changePlayback",
+				username: account.username,
+			});
+			client=this.writeClient(id,{
+				allowChangePlayback,
+			});
+		}
+		socket.emit("init",{
+			account: !client.account?null:{
+				username: client.account.username,
+				nickname: client.account.nickname,
+			},
+			allowChangePlayback: client.allowChangePlayback,
+			currentlyPlaying: this.currentlyPlaying,
+		});
+	});
+
+	this.musikPlayerClient=socketIoClient.io(musikPlayerServer);
+	this.musikPlayerClient.on("connect_error",error=>{
+		this.currentlyPlaying=null;
+		console.log("connect error",error.context.statusText.code);
+		if(error.context.statusText.code==="ECONNREFUSED"){}
+		else{
+			throw error;
+		}
+		setTimeout(()=> this.musikPlayerClient.connect(),1e3);
+	});
+	this.musikPlayerClient.on("currentlyPlaying",currentlyPlaying=>{
+		this.currentlyPlaying=currentlyPlaying;
+		this.io.emit("currentlyPlaying",currentlyPlaying);
+	});
+	this.musikPlayerClient.on("connect",()=>console.log("connected"));
+	this.musikPlayerClient.on("disconnect",()=>console.log("disconnected"));
+	
+};
+this.writeClient=(id,object)=>{
+	const client={
+		...this.clients.get(id),
+		...object,
+	};
+	this.clients.set(id,client);
+	return client;
+};
+this.stop=()=>{
+	this.musikPlayerClient.disconnect();
+};
