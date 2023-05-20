@@ -8,6 +8,7 @@ const musikPlayerServer="http://127.0.0.1:4561";
 
 this.start=()=>{
 	this.currentlyPlaying=null;
+	this.tracks=[];
 	this.clients=new Map();
 
 	this.io=new socketIo.Server(27397,{cors:{origin:"*"}});
@@ -48,7 +49,20 @@ this.start=()=>{
 			},
 			allowChangePlayback: client.allowChangePlayback,
 			currentlyPlaying: this.currentlyPlaying,
+			tracks: this.tracks,
 		});
+		if(client.allowChangePlayback){
+			socket.on("action-playback",(action,callback=()=>{})=>{
+				this.musikPlayerClient.emit("action-playback",action,result=>{
+					callback(result);
+				});
+			});
+			socket.on("set-playback",(data,callback=()=>{})=>{
+				this.musikPlayerClient.emit("set-playback",data,result=>{
+					callback(result);
+				});
+			})
+		}
 	});
 
 	this.musikPlayerClient=socketIoClient.io(musikPlayerServer);
@@ -65,8 +79,15 @@ this.start=()=>{
 		this.currentlyPlaying=currentlyPlaying;
 		this.io.emit("currentlyPlaying",currentlyPlaying);
 	});
+	this.musikPlayerClient.on("set-tracks",tracks=>{
+		this.tracks=tracks.map((item,index)=>({
+			...item,
+			index,
+		}));
+	});
 	this.musikPlayerClient.on("connect",()=>console.log("connected"));
 	this.musikPlayerClient.on("disconnect",()=>console.log("disconnected"));
+	this.musikPlayerClient.emit("get-tracks");
 	
 };
 this.writeClient=(id,object)=>{
