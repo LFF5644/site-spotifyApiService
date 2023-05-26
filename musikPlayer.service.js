@@ -68,7 +68,7 @@ this.start=()=>{
 	this.musikPlayerClient=socketIoClient.io(musikPlayerServer);
 	this.musikPlayerClient.on("connect_error",error=>{
 		this.currentlyPlaying=null;
-		console.log("connect error",error.context.statusText.code);
+		//console.log("connect error",error.context.statusText.code);
 		if(error.context.statusText.code==="ECONNREFUSED"){}
 		else{
 			throw error;
