@@ -77,10 +77,11 @@ this.start=()=>{
 		deviceId: null,
 		lastSend: 0,
 		playing: null,
-		progress: null,
+		progress: 0,
 		sourceId: null,
 		trackId: null,
 		volume: null,
+		noPlayback: null,
 	};
 
 	this.io=new socketIo.Server(13756,{cors:{origin:"*"}});
@@ -304,12 +305,17 @@ this.HandleServerResponse=data=>{
 	else if(clientRequest==="get track"){
 		if(serverResponse.error){
 			this.infos=null;
+			this.infos_raw=null;
+			if(!this.info_last.noPlayback) this.io.emit("set-infos",null);
+			this.info_last.noPlayback=true;
 			return false;
 		}
 		if(!serverResponse){
 			this.infos=null;
 			this.infos_raw=null;
 			log("no server response!");
+			if(!this.info_last.noPlayback) this.io.emit("set-infos",null);
+			this.info_last.noPlayback=true;
 			return false;
 		}
 		let i={};
@@ -348,6 +354,7 @@ this.HandleServerResponse=data=>{
 		if(i.progress!==this.info_last.progress) this.io.volatile.emit("change-progress",i.progress);
 		if(i.track.id!==this.info_last.trackId) this.io.emit("change-track",i.track);
 		if(i.source.id!==this.info_last.sourceId) this.io.emit("change-source",i.source);
+		if(Boolean(i)===this.info_last.noPlayback) this.io.emit("set-infos",i);
 
 		if(i.source.type==="playlist"&&!this.playlists.has(i.source.id)){
 			this.callApi({
@@ -365,6 +372,7 @@ this.HandleServerResponse=data=>{
 			sourceId: i.source.id,
 			trackId: i.track.id,
 			volume: i.device.volume,
+			noPlayback: !Boolean(i),
 		};
 	}
 	else if(clientRequest==="get playlist"){
@@ -449,12 +457,20 @@ this.playbackAction=(data)=>{
 		});
 	}
 	else if(action==="play"){
-		const {deviceId}=data;
-		const url=URLS.play+"?device_id="+(deviceId?deviceId:this.info_last.deviceId);
-		//log(url);
+		const {
+			deviceId,
+			context,
+			offset,
+		}=data;
+		let url=URLS.play+"?device_id="+(deviceId?deviceId:this.info_last.deviceId);
+		const body={};
+		if(context) body.context_uri=context;
+		if(offset) body.offset={position:Number(offset)},
+		console.log(body);
 		this.callApi({
 			method: "put",
 			url,
+			body,
 		});
 	}
 }
