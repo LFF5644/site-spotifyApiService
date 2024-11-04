@@ -1,5 +1,11 @@
 const socketIo=require("socket.io");
 const socketIoClient=require("socket.io-client");
+const alsamixer=require("alsamixer")({
+	card: 1,
+	defaultItem: "PCM",
+	spawnCommandListener: true,
+});
+
 const services={
 	account: service_require("server/account/account.new"),
 };
@@ -10,6 +16,9 @@ this.start=()=>{
 	this.currentlyPlaying=null;
 	this.tracks=[];
 	this.clients=new Map();
+	this.alsamixer={
+		volume: 50,
+	};
 
 	this.io=new socketIo.Server(27397,{cors:{origin:"*"}});
 	this.io.on("connection",socket=>{
@@ -50,6 +59,7 @@ this.start=()=>{
 			allowChangePlayback: client.allowChangePlayback,
 			currentlyPlaying: this.currentlyPlaying,
 			tracks: this.tracks,
+			volume: this.alsamixer.volume,
 		});
 		if(client.allowChangePlayback){
 			socket.on("action-playback",(action,callback=()=>{})=>{
@@ -61,9 +71,20 @@ this.start=()=>{
 				this.musikPlayerClient.emit("set-playback",data,result=>{
 					callback(result);
 				});
-			})
+			});
+			socket.on("set-volume",volume=>{
+				alsamixer.setVolume(volume);
+			});
 		}
 	});
+
+	alsamixer.on("volumeChange",(_eventName,data)=>{
+		if(this.alsamixer.volume!==data.volume){
+			this.io.emit("change-volume",data.volume);
+		}
+		this.alsamixer=data;
+	});
+	alsamixer.getVolume();
 
 	this.musikPlayerClient=socketIoClient.io(musikPlayerServer);
 	this.musikPlayerClient.on("connect_error",error=>{
@@ -100,4 +121,6 @@ this.writeClient=(id,object)=>{
 };
 this.stop=()=>{
 	this.musikPlayerClient.disconnect();
+	this.io.close();
+	alsamixer.close();
 };
