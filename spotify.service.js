@@ -19,7 +19,7 @@ const configFile="data/spotifyLoginData.json";
 const URLS={
 	"authorize":	"https://accounts.spotify.com/authorize",
 	"devices":		"https://api.spotify.com/v1/me/player/devices",
-	"mytracks":		"https://api.spotify.com/v1/me/tracks", //my collection (lieblingssongs)
+	"my-tracks":	"https://api.spotify.com/v1/me/tracks", //my collection (lieblingssongs)
 	"next":			"https://api.spotify.com/v1/me/player/next",
 	"nowPlaying": 	"https://api.spotify.com/v1/me/player/currently-playing",
 	"pause": 		"https://api.spotify.com/v1/me/player/pause",
@@ -235,22 +235,38 @@ this.createTemplate=(target,data)=>{
 		}
 	}
 	else if(target==="playlist"){
-		const items=[];
-		console.log(data.tracks.items)
+		let items=[];
+		let result={};
+		if(
+			this.playlists.has(data.id)&&
+			!data.name
+		){
+			console.log("load playlist");
+			result=this.playlists.get(data.id);
+			items=result.items;
+		}
+		else{
+			console.log("create playlist");
+			items=new Array(data.tracks.total);
+		}
+		//console.log(data.tracks.items)
 		for(let index=0; index<data.tracks.items.length; index+=1){
+			const offset=data.tracks.offset;
 			const item=data.tracks.items[index];
 			const trackId=item.track.id;
+			if(offset) console.log(item)
 			if(!this.tracks.has(trackId)){
 				log("Add-Track: "+item.track.name);
 				this.tracks.set(trackId,this.createTemplate("track",item.track));
+				//this.io.emit("set-track",item.track);
 			}
-			items.push({
+			items[index+offset]={
 				addedAt: Number(new Date(item.added_at)),
 				addedBy: item.added_by.id,
 				id: trackId,
-			});
-		};
-		const result={
+			};
+		}
+		result={
 			...TEMPLATES.playlist,
 			description: data.description,
 			id: data.id,
@@ -299,7 +315,7 @@ this.HandleServerResponse=data=>{
 		}
 	}
 
-	if(clientRequest==="logdata"){
+	if(clientRequest==="log-data"){
 		console.log("LOG-DATA",serverResponse);
 	}
 	else if(clientRequest==="get track"){
@@ -327,11 +343,14 @@ this.HandleServerResponse=data=>{
 				repeat: serverResponse.repeat_state,
 				shuffle: serverResponse.shuffle_state?(serverResponse.smart_shuffle?"smart-shuffle":"normal-shuffle"):"off",
 				progress: serverResponse.progress_ms,
-				source:{
+				source:serverResponse.context?{
 					type: serverResponse.context.type,
 					url: serverResponse.context.external_urls.spotify,
 					id: serverResponse.context.uri.split(":")[2],
 					//api: serverResponse.context.href,
+				}:{
+					type: "single-song",
+					id: null,
 				},
 				device: this.createTemplate("device",serverResponse.device),
 				track: this.createTemplate("track",serverResponse.item),
@@ -342,7 +361,7 @@ this.HandleServerResponse=data=>{
 			i=null;
 			infos_raw=null;
 			log("cant load data");
-			//console.log(e);
+			console.log(e);
 		}
 		this.infos=i;
 		this.infos_raw=infos_raw;
@@ -376,12 +395,73 @@ this.HandleServerResponse=data=>{
 		};
 	}
 	else if(clientRequest==="get playlist"){
-		const playlist=this.createTemplate("playlist",serverResponse);
-		if(!this.playlists.has(playlist.id)){
+		//console.log(serverResponse);
+		try{
+			if(this.playlists.has(serverResponse.id)){
+				log("get-playlist already exists!");
+				return false;
+			}
+			const playlist={
+				...TEMPLATES.playlist,
+				description: serverResponse.description,
+				id: serverResponse.id,
+				imgs: serverResponse.images,
+				items: new Array(serverResponse.tracks.total),
+				name: serverResponse.name,
+				ownerId: serverResponse.owner.id,
+				ownerName: serverResponse.owner.display_name,
+				ownerUrl: serverResponse.owner.external_urls.spotify,
+				public: serverResponse.public,
+				total: serverResponse.tracks.total,
+				url: serverResponse.external_urls.spotify,
+			}
+			for(let index=0; index<serverResponse.tracks.items.length; index+=1){
+				const offset=serverResponse.tracks.offset;
+				const item=serverResponse.tracks.items[index];
+				const trackId=item.track.id;
+				if(offset) console.log(item)
+				if(!this.tracks.has(trackId)){
+					log("Add-Track: "+item.track.name);
+					this.tracks.set(trackId,this.createTemplate("track",item.track));
+					//this.io.emit("set-track",item.track);
+				}
+				playlist.items[index+offset]={
+					addedAt: Number(new Date(item.added_at)),
+					addedBy: item.added_by.id,
+					id: trackId,
+				};
+			}
+			console.log("new list "+playlist.id);
 			this.playlists.set(playlist.id,playlist);
-			log("Add-Playlist: "+playlist.name);
-		}
+			
+
+
+			if(serverResponse.tracks.next){
+				log("Loading more Playlist items for "+playlist.name+" "+serverResponse.tracks.next);
+				this.callApi({
+					method: "get",
+					playlistId: serverResponse.id,
+					request: "get playlist-tracks",
+					url: serverResponse.tracks.next,
+				});
+			}else{
+				log("Add-Playlist: "+playlist.name);
+				this.io.emit("set-playlist",playlist);
+			}
+		}catch(e){console.log("err:",e);}
+	
 		fs.writeFileSync("/tmp/spotifyLastPlaylist.json",JSON.stringify(serverResponse,null,"\t"));
+	}
+	else if(clientRequest==="get playlist-tracks"){
+		fs.writeFileSync("/tmp/spotifyLastPlaylistExtend.json",JSON.stringify(serverResponse,null,"\t"));
+		if(!args.playlistId){
+			log("request get playlist-tracks but no playlistId given!");
+			return false;
+		}
+		if(!this.playlists.has(args.playlistId)){
+			log("request get-playlist-tracks playlist not exist with id: "+args.playlistId);
+		}
+		let playlist=this.playlists.get(args.playlistId);
 	}
 	else if(clientRequest==="get access_token"){
 		this.config.access_token=serverResponse.access_token;
