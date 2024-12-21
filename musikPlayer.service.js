@@ -1,7 +1,7 @@
 const socketIo=require("socket.io");
 const socketIoClient=require("socket.io-client");
 const alsamixer=require("alsamixer")({
-	card: 1,
+	card: 0,
 	defaultItem: "PCM",
 	spawnCommandListener: true,
 });
