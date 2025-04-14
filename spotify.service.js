@@ -12,7 +12,7 @@ const services={
 };
 
 const tmpSAV=(data)=>{
-	fs.writeFileSync("/tmp/tmpSave.json",JSON.stringify(data,null,"\t"));
+	//fs.writeFileSync("/tmp/tmpSave.json",JSON.stringify(data,null,"\t"));
 }
 
 const configFile="data/spotifyLoginData.json";
@@ -188,11 +188,11 @@ this.start=()=>{
 		}
 
 		if(
-			now-this.info_last.lastSend>3e3&&
+			now-this.info_last.lastSend>5e3&&
 			this.clients.size>0
 		) call();
 		else if(
-			now-this.info_last.lastSend>10e3&&
+			now-this.info_last.lastSend>20e3&&
 			this.clients.size===0
 		) call();
 
@@ -329,14 +329,14 @@ this.HandleServerResponse=data=>{
 		if(!serverResponse){
 			this.infos=null;
 			this.infos_raw=null;
-			log("no server response!");
+			//log("no server response!");
 			if(!this.info_last.noPlayback) this.io.emit("set-infos",null);
 			this.info_last.noPlayback=true;
 			return false;
 		}
 		let i={};
 		let infos_raw;
-		fs.writeFileSync("/tmp/spotifyLastTrackRaw.json",JSON.stringify(serverResponse,null,"\t"));
+		//fs.writeFileSync("/tmp/spotifyLastTrackRaw.json",JSON.stringify(serverResponse,null,"\t"));
 		try{
 			i={
 				playing: serverResponse.is_playing,
@@ -477,7 +477,7 @@ this.callApi=data=>{
 		request,
 		url,
 	}=data;
-	log("request: "+request);
+	//log("request: "+request);
 	fetch(url,{
 		method: method.toUpperCase(),
 		headers: {
